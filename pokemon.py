@@ -7,6 +7,36 @@ import mplcursors  # Import mplcursors for interactive hover labels
 from PIL import Image, ImageTk  # Pillow for handling images
 
 
+# Load evolution level data
+evol_df = pd.read_excel("evols.xlsx")
+evol_df.columns = evol_df.columns.str.strip().str.lower()
+
+# Create a lookup to get the max evolved form by a given level
+def get_final_evolution(name, max_level):
+    current = name.lower()
+    while True:
+        evolutions = evol_df[(evol_df['evolving from'].str.lower() == current) & (evol_df['level'] <= max_level)]
+        if evolutions.empty:
+            return current
+        current = evolutions.iloc[0]['evolving to'].lower()
+q
+# Helper to check if Pokémon is available at or below level
+valid_pokemon_names_by_level = set()
+for _, row in evol_df.iterrows():
+    if row['level'] <= 100:
+        valid_pokemon_names_by_level.add(row['evolving from'].lower())
+        valid_pokemon_names_by_level.add(row['evolving to'].lower())
+
+def is_pokemon_available_by_level(name, max_level):
+    name = name.lower()
+    for _, row in evol_df.iterrows():
+        evolving_to = row['evolving to']
+        if pd.isna(evolving_to):
+            continue
+        if evolving_to.lower() == name and row['level'] > max_level:
+            return False
+    return True
+
 def manually_add_pokemon():
     """Allow the user to manually add a Pokémon to the team."""
     selected_item = manual_selection.get().strip().lower()
@@ -51,29 +81,87 @@ def save_team():
     messagebox.showinfo("Team Saved", "Your team has been saved as 'selected_team.csv'.")
 
 def swap_pokemon():
-    """Allow the user to swap out a selected Pokémon."""
     selected_item = team_tree.selection()
     if not selected_item:
         messagebox.showinfo("No Selection", "Please select a Pokémon to swap.")
         return
-    
-    available_pokemon = df.sample(n=1).iloc[0]
-    
-    team_tree.item(selected_item, values=(available_pokemon['name'], available_pokemon['type1'], available_pokemon['type2'], 
-                                          available_pokemon['hp'], available_pokemon['attack'], 
-                                          available_pokemon['defense'], available_pokemon['speed']))
-    messagebox.showinfo("Pokémon Swapped", f"Swapped Pokémon with {available_pokemon['name']}.")
+
+    try:
+        generation = int(gen_var.get())
+        max_level = int(level_var.get())
+    except ValueError:
+        messagebox.showerror("Invalid Input", "Please enter valid values for generation and level.")
+        return
+
+    prioritized_stat = stat_var.get().lower() if stat_var.get() and stat_var.get().lower() != "none" else None
+    preferred_types = [t for t, var in type_vars.items() if var.get() == 1]
+    excluded_types = [t for t, var in excluded_type_vars.items() if var.get() == 1]
+
+    current_team_names = [team_tree.item(i)['values'][0].lower() for i in team_tree.get_children()]
+    type_counts = {}
+    for i in team_tree.get_children():
+        t1 = team_tree.item(i)['values'][1].lower()
+        t2 = team_tree.item(i)['values'][2].lower() if team_tree.item(i)['values'][2] else None
+        for t in [t1, t2]:
+            if t:
+                type_counts[t] = type_counts.get(t, 0) + 1
+
+    filtered_df = filter_by_generation(df, generation)
+    if prioritized_stat in filtered_df.columns:
+        filtered_df = filtered_df.sort_values(by=prioritized_stat, ascending=False)
+
+    for _, pokemon in filtered_df.iterrows():
+        name = pokemon['name'].lower()
+        final_name = get_final_evolution(name, max_level)
+        final_pokemon = df[df['name'].str.lower() == final_name]
+        if final_pokemon.empty:
+            continue
+
+        pokemon = final_pokemon.iloc[0]
+        if not is_pokemon_available_by_level(pokemon['name'], max_level):
+            continue
+
+        if pokemon['name'].lower() in current_team_names:
+            continue
+
+        if pokemon['type1'] in excluded_types or pokemon['type2'] in excluded_types:
+            continue
+
+        if type_counts.get(pokemon['type1'], 0) >= 2 or (pokemon['type2'] and type_counts.get(pokemon['type2'], 0) >= 2):
+            continue
+
+        # Found valid replacement
+        team_tree.item(selected_item, values=(pokemon['name'], pokemon['type1'], pokemon['type2'], 
+                                              pokemon['hp'], pokemon['attack'], 
+                                              pokemon['defense'], pokemon['speed']))
+        messagebox.showinfo("Pokémon Swapped", f"Swapped Pokémon with {pokemon['name']}.")
+        return
+
+    messagebox.showinfo("No Swap Available", "No suitable Pokémon found to swap in with current filters.")
 
 def generate_team():
     global team
     try:
         generation_text = gen_var.get().strip()
-        
+        level_text = level_var.get().strip()
+
+        try:
+            generation = int(gen_var.get())
+            level_text = level_var.get().strip()
+            if not level_text:
+                raise ValueError("Max level is required.")
+            max_level = int(level_text)
+        except ValueError as ve:
+            messagebox.showerror("Invalid Input", str(ve))
+            return
+    
         if not generation_text.isdigit():
             raise ValueError("Invalid numerical input.")
+
         
         generation = int(generation_text)
-        
+        max_level = int(level_text)
+
         if generation < 1 or generation > 8:
             raise ValueError("Generation must be between 1 and 8.")
         
@@ -89,7 +177,7 @@ def generate_team():
             messagebox.showinfo("No Pokémon Found", "No Pokémon match the selected criteria. Try adjusting the filters.")
             return
         
-        team = select_custom_team(filtered_df, prioritized_stat, preferred_types, excluded_types)
+        team = select_custom_team(filtered_df, prioritized_stat, preferred_types, excluded_types, max_level)
         
         for row in team_tree.get_children():
             team_tree.delete(row)
@@ -111,29 +199,39 @@ def filter_by_generation(df, generation):
     """Filter Pokémon by generation."""
     return df[df['generation'] == generation]
 
-def select_custom_team(df, prioritize_stat=None, preferred_types=None, excluded_types=None):
-    """Select a custom team of 6 Pokémon based on user preferences."""
+def select_custom_team(df, prioritize_stat=None, preferred_types=None, excluded_types=None, max_level=None):
     if df.empty:
         return pd.DataFrame()
-    
+
     if prioritize_stat and prioritize_stat in df.columns:
         df = df.sort_values(by=prioritize_stat, ascending=False)
-    
+
     team = []
     used_types = set()
-    
+
     for _, pokemon in df.iterrows():
+        name = pokemon['name'].lower()
+        final_name = get_final_evolution(name, max_level) if max_level is not None else name
+        final_pokemon = df[df['name'].str.lower() == final_name]
+        if final_pokemon.empty:
+            continue
+
+        pokemon = final_pokemon.iloc[0]
+
+        if max_level is not None and not is_pokemon_available_by_level(pokemon['name'], max_level):
+            continue
+
         pokemon_types = {pokemon['type1'], pokemon.get('type2', None)}
-        # **Exclude Pokémon if it matches an excluded type**
+
         if excluded_types and (pokemon['type1'] in excluded_types or pokemon['type2'] in excluded_types):
             continue
-        
+
         if not used_types.intersection(pokemon_types) or (preferred_types and (pokemon['type1'] in preferred_types or pokemon['type2'] in preferred_types)):
             team.append(pokemon)
             used_types.update(pokemon_types)
         if len(team) == 6:
             break
-    
+
     return pd.DataFrame(team)
 
 def clear_team():
@@ -392,6 +490,8 @@ stat_var = tk.StringVar()
 stat_dropdown = ttk.Combobox(stat_frame, textvariable=stat_var, values=["none","hp", "attack", "defense", "speed", "base_total"], state="readonly")
 stat_dropdown.grid(row=0, column=0, padx=10, pady=5)
 
+
+
 # === Preferred Types Selection ===
 type_frame = ttk.LabelFrame(root, text="Select Preferred Types (Optional)")
 type_frame.grid(row=3, column=0, padx=10, pady=10, sticky="ew")
@@ -425,6 +525,16 @@ manual_selection = tk.StringVar()
 manual_entry = tk.Entry(manual_frame, textvariable=manual_selection)
 manual_entry.grid(row=0, column=0, padx=10, pady=5, sticky="ew")
 tk.Button(manual_frame, text="Add Pokémon", command=lambda: print("Adding Pokémon")).grid(row=0, column=1, padx=10, pady=5)
+
+# UI addition for Level input
+level_frame = ttk.LabelFrame(root, text="Max Level")
+level_frame.grid(row=4, column=1, padx=10, pady=10, sticky="ew")
+
+level_var = tk.StringVar()
+level_entry = tk.Entry(level_frame, textvariable=level_var)
+level_entry.grid(row=0, column=0, padx=10, pady=5)
+
+
 
 # === Button Grid ===
 button_frame = tk.Frame(root, bg="#f5f5f5")
