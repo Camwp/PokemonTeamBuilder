@@ -49,3 +49,4 @@ My goal was to create a fun and interactive way to explore the dataset while lea
 * Display level of pokemon generated for team and what level it evolves last / next
 * Add more interactive options for opponents team for speculation of good team mebers against theirs
 * Allow for loading of team file to team can be analyzed at any point.
+* Add more filters to include / exclude legendary's on team
