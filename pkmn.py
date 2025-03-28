@@ -8,7 +8,7 @@ from PIL import Image, ImageTk  # Pillow for handling images
 
 
 # Load evolution level into data frame 
-evol_df = pd.read_excel("evols.xlsx")
+evol_df = pd.read_excel("Data/evols.xlsx")
 evol_df.columns = evol_df.columns.str.strip().str.lower()
 
 # Helper to check if Pokémon is available at or below level
@@ -78,7 +78,7 @@ def save_team():
         team_list.append(team_tree.item(row)['values'])
     
     team_df = pd.DataFrame(team_list, columns=["Name", "Type 1", "Type 2", "HP", "Attack", "Defense", "Speed"])
-    team_df.to_csv("selected_team.csv", index=False)
+    team_df.to_csv("saved_team.csv", index=False)
     messagebox.showinfo("Team Saved", "Your team has been saved as 'selected_team.csv'.")
 # Swap currently selected/highlighted pokemon with alternative that meets or is close to criteria
 def swap_pokemon():
@@ -358,7 +358,7 @@ def load_type_chart(file_path):
         print(f"\n[ERROR] Failed to load type chart: {e}")
         return None
 
-type_chart = load_type_chart("chart.csv")
+type_chart = load_type_chart("Data/chart.csv")
 if type_chart is None:
     print("[ERROR] Type Chart failed to load! Exiting...")
     exit()
@@ -455,7 +455,7 @@ def analyze_all_pokemon():
     plot_weight_vs_base_stats(df)
 
 
-df = load_pokemon_data("pokemon.csv")
+df = load_pokemon_data("Data/pokemon.csv")
 team = pd.DataFrame()
 
 type_vars = {}
@@ -470,7 +470,7 @@ root.geometry("1000x750")
 root.configure(bg="#4a4544")  # Light background color for a cleaner UI
 
 # === Load and Set Background Image ===
-bg_image = Image.open("pika.jpg")
+bg_image = Image.open("Data/pika.jpg")
 bg_photo = ImageTk.PhotoImage(bg_image)
 
 bg_label = tk.Label(root, image=bg_photo)
