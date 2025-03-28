@@ -7,19 +7,10 @@ import mplcursors  # Import mplcursors for interactive hover labels
 from PIL import Image, ImageTk  # Pillow for handling images
 
 
-# Load evolution level data
+# Load evolution level into data frame 
 evol_df = pd.read_excel("evols.xlsx")
 evol_df.columns = evol_df.columns.str.strip().str.lower()
 
-# Create a lookup to get the max evolved form by a given level
-def get_final_evolution(name, max_level):
-    current = name.lower()
-    while True:
-        evolutions = evol_df[(evol_df['evolving from'].str.lower() == current) & (evol_df['level'] <= max_level)]
-        if evolutions.empty:
-            return current
-        current = evolutions.iloc[0]['evolving to'].lower()
-q
 # Helper to check if Pokémon is available at or below level
 valid_pokemon_names_by_level = set()
 for _, row in evol_df.iterrows():
@@ -27,6 +18,16 @@ for _, row in evol_df.iterrows():
         valid_pokemon_names_by_level.add(row['evolving from'].lower())
         valid_pokemon_names_by_level.add(row['evolving to'].lower())
 
+
+# Create a lookup to get the max evolved form by a given level and final form
+def get_final_evolution(name, max_level):
+    current = name.lower()
+    while True:
+        evolutions = evol_df[(evol_df['evolving from'].str.lower() == current) & (evol_df['level'] <= max_level)]
+        if evolutions.empty:
+            return current
+        current = evolutions.iloc[0]['evolving to'].lower()
+# Check if a Pokémon is valid under a given level
 def is_pokemon_available_by_level(name, max_level):
     name = name.lower()
     for _, row in evol_df.iterrows():
@@ -36,7 +37,7 @@ def is_pokemon_available_by_level(name, max_level):
         if evolving_to.lower() == name and row['level'] > max_level:
             return False
     return True
-
+# Add specific pokemon by name to team
 def manually_add_pokemon():
     """Allow the user to manually add a Pokémon to the team."""
     selected_item = manual_selection.get().strip().lower()
@@ -55,7 +56,7 @@ def manually_add_pokemon():
                                         pokemon['hp'], pokemon['attack'], 
                                         pokemon['defense'], pokemon['speed']))
     messagebox.showinfo("Pokémon Added", f"{pokemon['name']} has been added to your team!")
-
+# Remove specific selected/highlighted pokemon name from team
 def remove_pokemon():
     """Remove the selected Pokémon from the team."""
     selected_item = team_tree.selection()
@@ -65,7 +66,7 @@ def remove_pokemon():
 
     team_tree.delete(selected_item)
     messagebox.showinfo("Pokémon Removed", "The selected Pokémon has been removed from your team.")
-
+# Export team to csv with data
 def save_team():
     """Save the generated team to a CSV file."""
     if not team_tree.get_children():
@@ -79,7 +80,7 @@ def save_team():
     team_df = pd.DataFrame(team_list, columns=["Name", "Type 1", "Type 2", "HP", "Attack", "Defense", "Speed"])
     team_df.to_csv("selected_team.csv", index=False)
     messagebox.showinfo("Team Saved", "Your team has been saved as 'selected_team.csv'.")
-
+# Swap currently selected/highlighted pokemon with alternative that meets or is close to criteria
 def swap_pokemon():
     selected_item = team_tree.selection()
     if not selected_item:
@@ -138,7 +139,7 @@ def swap_pokemon():
         return
 
     messagebox.showinfo("No Swap Available", "No suitable Pokémon found to swap in with current filters.")
-
+# Generate team that meets preferred options
 def generate_team():
     global team
     try:
@@ -188,17 +189,17 @@ def generate_team():
                                                  pokemon['defense'], pokemon['speed']))
     except ValueError:
         messagebox.showerror("Error", "Please enter a valid numerical value for Generation (1-8).")
-
+# Load dataframe with pkmn data from csv
 def load_pokemon_data(file_path):
     """Load and clean the Pokémon dataset."""
     df = pd.read_csv(file_path)
     df.columns = df.columns.str.strip().str.lower()  # Ensure all columns are lowercase
     return df
-
+# Filter DataFrame Pokémon by generation to isolate only pokemon from a specific gen
 def filter_by_generation(df, generation):
     """Filter Pokémon by generation."""
     return df[df['generation'] == generation]
-
+# Select a team of Pokémon based on filters and level using new selected gen
 def select_custom_team(df, prioritize_stat=None, preferred_types=None, excluded_types=None, max_level=None):
     if df.empty:
         return pd.DataFrame()
@@ -233,7 +234,7 @@ def select_custom_team(df, prioritize_stat=None, preferred_types=None, excluded_
             break
 
     return pd.DataFrame(team)
-
+# remove every pokemon from current team
 def clear_team():
     """Clears the entire Pokémon team from the table and resets the team dataframe."""
     global team  # Ensure we're modifying the global team dataframe
@@ -251,6 +252,9 @@ def clear_team():
 
     messagebox.showinfo("Team Cleared", "Your team has been cleared successfully.")
 
+
+
+# Bar chart of average base stats by type
 def plot_type_strengths(df):
     """Plot average base stats per Pokémon type with interactivity."""
     type_stats = df.groupby('type1')[['hp', 'attack', 'defense', 'sp_attack', 'sp_defense', 'speed']].mean()
@@ -265,7 +269,7 @@ def plot_type_strengths(df):
 
 
     plt.show(block=False)
-
+# Scatterplot of weight vs base total
 def plot_weight_vs_base_stats(df):
     """Plot Pokémon weight vs. base stats with interactivity."""
     if 'weight_kg' not in df.columns:
@@ -290,7 +294,7 @@ def plot_weight_vs_base_stats(df):
         )
 
     plt.show(block=False)
-
+# Normalize and index the type chart
 def process_type_chart(chart):
     """Process the type effectiveness chart to normalize type names."""
     print("\n[DEBUG] Type Chart Initial Columns:", chart.columns.tolist())  # Debugging print
@@ -318,7 +322,7 @@ def process_type_chart(chart):
 
     print("\n[DEBUG] Type Chart Index After Processing:", chart.index.tolist())  # Debugging print
     return chart
-
+# Load and prepare the type effectiveness chart
 def load_type_chart(file_path):
     """Load and debug the Pokémon type effectiveness chart."""
     try:
@@ -360,7 +364,7 @@ if type_chart is None:
     exit()
 type_chart = process_type_chart(type_chart)  # Apply normalization
 
-
+# Get type effectiveness row from chart safely
 def get_type_effectiveness(pokemon_type, type_chart):
     
 
@@ -374,6 +378,9 @@ def get_type_effectiveness(pokemon_type, type_chart):
         return None
     return type_chart.loc[pokemon_type]
 
+
+
+# Analyze the selected team and show stats and effectiveness
 def analyze_team():
     """Analyze the selected team and generate type effectiveness details."""
     if team.empty:
@@ -399,7 +406,7 @@ def analyze_team():
 
     plot_type_strengths(team)
     plot_weight_vs_base_stats(team)
-
+# Generate type matchup details for each team member
 def generate_team_recommendations(team, type_chart):
     
     """Analyze Pokémon team and display their type effectiveness."""
@@ -441,7 +448,7 @@ def generate_team_recommendations(team, type_chart):
 
     print(report)  # Print report for debugging
     return report
-
+# Analyze all 1302 pokemon that exist via type strength charts & weight/base stat charts
 def analyze_all_pokemon():
     """Analyze all Pokémon in the dataset."""
     plot_type_strengths(df)
@@ -489,8 +496,6 @@ stat_frame.grid(row=2, column=1, padx=10, pady=10, sticky="ew")
 stat_var = tk.StringVar()
 stat_dropdown = ttk.Combobox(stat_frame, textvariable=stat_var, values=["none","hp", "attack", "defense", "speed", "base_total"], state="readonly")
 stat_dropdown.grid(row=0, column=0, padx=10, pady=5)
-
-
 
 # === Preferred Types Selection ===
 type_frame = ttk.LabelFrame(root, text="Select Preferred Types (Optional)")
